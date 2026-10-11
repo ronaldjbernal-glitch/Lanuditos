@@ -846,6 +846,7 @@
       <button class="chip" data-tab="resenas">Reseñas</button>
       <button class="chip" data-tab="estadisticas">Estadísticas</button>
       <button class="chip" data-tab="sitio">Apariencia y datos</button>
+      <button class="chip" data-tab="acceso">Acceso</button>
     </div>
 
     <div id="adminProductsSection">
@@ -1141,6 +1142,29 @@
       </div>
     </div>
 
+    <div id="adminAccessSection" style="display:none;">
+      <div class="config-note">
+        Aquí controlas quién puede entrar al panel usando su número de celular (acceso por correo y
+        contraseña sigue funcionando siempre). Solo la cuenta de correo principal puede agregar o
+        quitar números — si entraste por celular, puedes ver la lista pero no cambiarla.
+      </div>
+
+      <div id="accessOwnerControls" style="display:none;">
+        <div class="section-title" style="margin-top:0; padding-top:0; border-top:none;">Agregar número</div>
+        <div class="field"><label>Número de celular</label><input id="accessPhone" type="tel" placeholder="+57 300 1234567" autocomplete="tel"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="addAccessPhoneBtn">Agregar número</button>
+        </div>
+      </div>
+      <div id="accessReadonlyNote" class="config-note" style="display:none;">
+        Entraste con tu celular, así que solo puedes ver esta lista. Para agregar o quitar números,
+        entra con el correo y la contraseña principal.
+      </div>
+
+      <div class="section-title">Números con acceso</div>
+      <div class="admin-list" id="accessList"></div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-danger" id="logoutBtn">Cerrar sesión</button>
       <button class="btn btn-ghost" id="adminCloseBtn">Cerrar panel</button>
@@ -1230,7 +1254,8 @@
 ====================================================== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, increment
+  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, increment,
+  getDoc, arrayUnion, arrayRemove
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut,
@@ -1263,6 +1288,7 @@ const productsCol = collection(db, "productos");
 const categoriesCol = collection(db, "categorias");
 const ordersCol = collection(db, "pedidos");
 const settingsRef = doc(db, "config", "sitio");
+const adminAccessRef = doc(db, "config", "adminAccess");
 const presenceCol = collection(db, "presencia");
 const analyticsCol = collection(db, "analytics");
 const resenasCol = collection(db, "resenas");
@@ -1507,6 +1533,41 @@ function subscribeAnalytics(){
 function unsubscribeAnalyticsFn(){
   if(unsubscribeAnalytics){ unsubscribeAnalytics(); unsubscribeAnalytics = null; }
   ANALYTICS = [];
+}
+
+/* ---------- Números de celular con acceso de administrador ---------- */
+// Lista guardada en Firestore (config/adminAccess, campo allowedPhones). Las reglas de Firestore
+// deben permitir escribir este documento SOLO a quien entró con correo y contraseña — así, solo
+// el dueño de esa cuenta puede agregar o quitar números desde la pestaña "Acceso" del panel.
+let ADMIN_ACCESS_PHONES = [];
+let unsubscribeAdminAccess = null;
+function subscribeAdminAccess(){
+  if(unsubscribeAdminAccess) return;
+  unsubscribeAdminAccess = onSnapshot(adminAccessRef, snap => {
+    ADMIN_ACCESS_PHONES = snap.exists() ? (snap.data().allowedPhones || []) : [];
+    if(adminOverlay && adminOverlay.classList.contains('open') &&
+       document.getElementById('adminAccessSection').style.display !== 'none') renderAccessList();
+  }, err => { console.error(err); });
+}
+function unsubscribeAdminAccessFn(){
+  if(unsubscribeAdminAccess){ unsubscribeAdminAccess(); unsubscribeAdminAccess = null; }
+  ADMIN_ACCESS_PHONES = [];
+}
+async function isPhoneAllowedAdmin(phoneNumber){
+  try{
+    const snap = await getDoc(adminAccessRef);
+    const list = snap.exists() ? (snap.data().allowedPhones || []) : [];
+    return list.includes(phoneNumber);
+  }catch(err){
+    console.error(err);
+    return false;
+  }
+}
+function normalizePhone(raw){
+  raw = (raw || '').trim();
+  if(!raw) return '';
+  // Si no escriben el indicativo del país, asumimos Colombia (+57).
+  return raw.startsWith('+') ? raw.replace(/\s+/g, '') : ('+57' + raw.replace(/\D/g, ''));
 }
 
 function updatePendingTitleBadge(){
@@ -2199,6 +2260,7 @@ function openAdmin(){
   document.getElementById('adminOrdersSection').style.display = 'none';
   document.getElementById('adminStatsSection').style.display = 'none';
   document.getElementById('adminSiteSection').style.display = 'none';
+  document.getElementById('adminAccessSection').style.display = 'none';
   maybeShowOnboarding();
 }
 function closeAdmin(){ adminOverlay.classList.remove('open'); }
@@ -2220,25 +2282,25 @@ document.getElementById('onboardingOverlay').addEventListener('click', e => {
   if(e.target.id === 'onboardingOverlay') dismissOnboarding();
 });
 
-// Números de celular autorizados para entrar como administrador (formato internacional, ej: "+573001234567").
-// Firebase no tiene una opción para "aprobar" números de antemano: cualquiera que reciba el código SMS queda
-// verificado, así que el filtro real vive aquí. Si dejas la lista vacía, CUALQUIER número verificado por SMS
-// entrará como admin; agrega tu número abajo para que solo tú puedas usar el acceso por celular.
-const ADMIN_ALLOWED_PHONES = [
-  // "+573001234567",
-];
+// Quién puede entrar por celular lo decide la lista guardada en Firestore (config/adminAccess),
+// que solo el administrador que entró con correo y contraseña puede editar desde la pestaña
+// "Acceso" del panel. Firebase no tiene forma de "pre-aprobar" números: cualquiera que reciba el
+// código SMS queda verificado, así que este filtro es el que de verdad protege el panel.
 function isPhoneUser(user){
   return !!user && user.providerData.some(p => p.providerId === 'phone');
 }
 
-onAuthStateChanged(auth, (user) => {
-  if(user && isPhoneUser(user) && ADMIN_ALLOWED_PHONES.length && !ADMIN_ALLOWED_PHONES.includes(user.phoneNumber)){
-    signOut(auth);
-    showToast("Este número no tiene acceso al panel de administrador");
-    return;
+onAuthStateChanged(auth, async (user) => {
+  if(user && isPhoneUser(user)){
+    const allowed = await isPhoneAllowedAdmin(user.phoneNumber);
+    if(!allowed){
+      await signOut(auth);
+      showToast("Este número no tiene acceso al panel de administrador");
+      return;
+    }
   }
   isAdmin = !!user;
-  if(isAdmin){ subscribeOrders(); subscribeAnalytics(); } else { unsubscribeOrdersFn(); unsubscribeAnalyticsFn(); }
+  if(isAdmin){ subscribeOrders(); subscribeAnalytics(); subscribeAdminAccess(); } else { unsubscribeOrdersFn(); unsubscribeAnalyticsFn(); unsubscribeAdminAccessFn(); }
   const notifWrap = document.getElementById('notifWrap');
   if(notifWrap) notifWrap.style.display = isAdmin ? 'block' : 'none';
   if(isAdmin) renderNotifications();
@@ -2294,10 +2356,8 @@ function getRecaptcha(){
 }
 
 async function sendPhoneCode(){
-  const raw = document.getElementById('loginPhone').value.trim();
-  if(!raw){ showToast("Escribe tu número de celular"); return; }
-  // Si no escriben el indicativo del país, asumimos Colombia (+57).
-  const phone = raw.startsWith('+') ? raw.replace(/\s+/g, '') : ('+57' + raw.replace(/\D/g, ''));
+  const phone = normalizePhone(document.getElementById('loginPhone').value);
+  if(!phone){ showToast("Escribe tu número de celular"); return; }
   try{
     const verifier = getRecaptcha();
     phoneConfirmationResult = await signInWithPhoneNumber(auth, phone, verifier);
@@ -2319,7 +2379,8 @@ async function verifyPhoneCode(){
   try{
     const result = await phoneConfirmationResult.confirm(code);
     const phoneNumber = result.user.phoneNumber;
-    if(ADMIN_ALLOWED_PHONES.length && !ADMIN_ALLOWED_PHONES.includes(phoneNumber)){
+    const allowed = await isPhoneAllowedAdmin(phoneNumber);
+    if(!allowed){
       await signOut(auth);
       showToast("Este número no tiene acceso al panel de administrador");
       return;
@@ -2387,10 +2448,84 @@ document.getElementById('adminTabs').addEventListener('click', e => {
   document.getElementById('adminOrdersSection').style.display = tab === 'pedidos' ? 'block' : 'none';
   document.getElementById('adminStatsSection').style.display = tab === 'estadisticas' ? 'block' : 'none';
   document.getElementById('adminSiteSection').style.display = tab === 'sitio' ? 'block' : 'none';
+  document.getElementById('adminAccessSection').style.display = tab === 'acceso' ? 'block' : 'none';
   if(tab === 'sitio') fillSiteForm();
   if(tab === 'pedidos') renderOrders();
   if(tab === 'resenas') renderResenaList();
   if(tab === 'estadisticas') renderStats();
+  if(tab === 'acceso') renderAccessList();
+});
+
+/* ---------- Panel admin: acceso por celular ---------- */
+function isOwnerSession(){
+  // true solo si la sesión actual entró con correo y contraseña (el acceso "dueño").
+  const u = auth.currentUser;
+  return !!u && u.providerData.some(p => p.providerId === 'password');
+}
+function renderAccessList(){
+  const list = document.getElementById('accessList');
+  if(!list) return;
+  const owner = isOwnerSession();
+  document.getElementById('accessOwnerControls').style.display = owner ? 'block' : 'none';
+  document.getElementById('accessReadonlyNote').style.display = owner ? 'none' : 'block';
+  if(ADMIN_ACCESS_PHONES.length === 0){
+    list.innerHTML = `<div style="color:var(--ink-soft); font-size:13.5px; padding:14px 0;">Todavía no hay números agregados. Solo el acceso por correo funciona hasta que agregues uno.</div>`;
+    return;
+  }
+  list.innerHTML = ADMIN_ACCESS_PHONES.map(phone => `
+    <div class="admin-row" data-phone="${phone}">
+      <div class="info"><h4>${phone}</h4></div>
+      <div class="actions">
+        ${owner ? `<button class="icon-sm del-access-phone" data-confirm="0" title="Quitar acceso">✕</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('accessList').addEventListener('click', async e => {
+  const row = e.target.closest('.admin-row');
+  if(!row) return;
+  const phone = row.dataset.phone;
+  const delBtn = e.target.closest('.del-access-phone');
+  if(!delBtn) return;
+  if(delBtn.dataset.confirm === '1'){
+    try{
+      await updateDoc(adminAccessRef, { allowedPhones: arrayRemove(phone) });
+      showToast("Número eliminado");
+    }catch(err){
+      console.error(err);
+      showToast("No se pudo quitar (revisa las reglas de Firestore)");
+    }
+  } else {
+    delBtn.dataset.confirm = '1';
+    delBtn.textContent = '✔';
+    delBtn.title = 'Clic de nuevo para confirmar';
+    setTimeout(() => {
+      if(delBtn.isConnected){
+        delBtn.dataset.confirm = '0';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Quitar acceso';
+      }
+    }, 3000);
+  }
+});
+
+document.getElementById('addAccessPhoneBtn').addEventListener('click', async () => {
+  const phone = normalizePhone(document.getElementById('accessPhone').value);
+  if(!phone){ showToast("Escribe un número de celular"); return; }
+  try{
+    const snap = await getDoc(adminAccessRef);
+    if(!snap.exists()){
+      await setDoc(adminAccessRef, { allowedPhones: [phone] });
+    } else {
+      await updateDoc(adminAccessRef, { allowedPhones: arrayUnion(phone) });
+    }
+    document.getElementById('accessPhone').value = '';
+    showToast("Número agregado");
+  }catch(err){
+    console.error(err);
+    showToast("No se pudo agregar (revisa las reglas de Firestore)");
+  }
 });
 
 /* ---------- Panel admin: categorías ---------- */
