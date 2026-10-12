@@ -433,6 +433,15 @@
     background:transparent; color:var(--ink-soft); cursor:pointer; font-size:13px;
   }
   .icon-sm:hover{ border-color:var(--clay); color:var(--clay); }
+  .tab-perm-group{ display:flex; gap:8px; flex-wrap:wrap; }
+  .tab-perm-chip{
+    font-size:12.5px; padding:7px 14px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--ink-soft); cursor:pointer; transition:all .15s ease;
+  }
+  .tab-perm-chip.active{ background:var(--moss); border-color:var(--moss); color:#fff; }
+  .tab-perm-chip:disabled{ cursor:default; opacity:.7; }
+  .access-row{ flex-direction:column; align-items:stretch; gap:10px; }
+  .access-row .access-row-top{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
   .section-title{ font-family:'Fraunces', serif; font-size:17px; margin:32px 0 14px; padding-top:20px; border-top:1px solid var(--line); }
   .section-title:first-child{ margin-top:0; padding-top:0; border-top:none; }
   .accordion-item{ border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden; }
@@ -1152,16 +1161,23 @@
       <div id="accessOwnerControls" style="display:none;">
         <div class="section-title" style="margin-top:0; padding-top:0; border-top:none;">Agregar número</div>
         <div class="field"><label>Número de celular</label><input id="accessPhone" type="tel" placeholder="+57 300 1234567" autocomplete="tel"></div>
+        <div class="field">
+          <label>A qué secciones puede entrar</label>
+          <div class="tab-perm-group" id="accessNewTabs"></div>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-primary" id="addAccessPhoneBtn">Agregar número</button>
         </div>
       </div>
       <div id="accessReadonlyNote" class="config-note" style="display:none;">
-        Entraste con tu celular, así que solo puedes ver esta lista. Para agregar o quitar números,
-        entra con el correo y la contraseña principal.
+        Entraste con tu celular, así que solo puedes ver esta lista. Para agregar o quitar números, o
+        cambiar a qué secciones puede entrar cada uno, entra con el correo y la contraseña principal.
       </div>
 
       <div class="section-title">Números con acceso</div>
+      <div class="config-note" id="accessEditNote" style="display:none;">
+        Haz clic en una sección para activarla o desactivarla para ese número. Los cambios se guardan solos.
+      </div>
       <div class="admin-list" id="accessList"></div>
     </div>
 
@@ -1255,7 +1271,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, increment,
-  getDoc, arrayUnion, arrayRemove
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut,
@@ -1536,32 +1552,23 @@ function unsubscribeAnalyticsFn(){
 }
 
 /* ---------- Números de celular con acceso de administrador ---------- */
-// Lista guardada en Firestore (config/adminAccess, campo allowedPhones). Las reglas de Firestore
-// deben permitir escribir este documento SOLO a quien entró con correo y contraseña — así, solo
-// el dueño de esa cuenta puede agregar o quitar números desde la pestaña "Acceso" del panel.
-let ADMIN_ACCESS_PHONES = [];
+// Cuentas guardadas en Firestore (config/adminAccess, campo accounts: [{phone, tabs}]).
+// Las reglas de Firestore deben permitir escribir este documento SOLO a quien entró con
+// correo y contraseña — así, solo el dueño de esa cuenta puede agregar, quitar o cambiar
+// los permisos de cada número desde la pestaña "Acceso" del panel.
+let ADMIN_ACCESS_ACCOUNTS = [];
 let unsubscribeAdminAccess = null;
 function subscribeAdminAccess(){
   if(unsubscribeAdminAccess) return;
   unsubscribeAdminAccess = onSnapshot(adminAccessRef, snap => {
-    ADMIN_ACCESS_PHONES = snap.exists() ? (snap.data().allowedPhones || []) : [];
+    ADMIN_ACCESS_ACCOUNTS = accountsFromDoc(snap.exists() ? snap.data() : null);
     if(adminOverlay && adminOverlay.classList.contains('open') &&
        document.getElementById('adminAccessSection').style.display !== 'none') renderAccessList();
   }, err => { console.error(err); });
 }
 function unsubscribeAdminAccessFn(){
   if(unsubscribeAdminAccess){ unsubscribeAdminAccess(); unsubscribeAdminAccess = null; }
-  ADMIN_ACCESS_PHONES = [];
-}
-async function isPhoneAllowedAdmin(phoneNumber){
-  try{
-    const snap = await getDoc(adminAccessRef);
-    const list = snap.exists() ? (snap.data().allowedPhones || []) : [];
-    return list.includes(phoneNumber);
-  }catch(err){
-    console.error(err);
-    return false;
-  }
+  ADMIN_ACCESS_ACCOUNTS = [];
 }
 function normalizePhone(raw){
   raw = (raw || '').trim();
@@ -2261,6 +2268,7 @@ function openAdmin(){
   document.getElementById('adminStatsSection').style.display = 'none';
   document.getElementById('adminSiteSection').style.display = 'none';
   document.getElementById('adminAccessSection').style.display = 'none';
+  applyAdminTabVisibility();
   maybeShowOnboarding();
 }
 function closeAdmin(){ adminOverlay.classList.remove('open'); }
@@ -2292,12 +2300,15 @@ function isPhoneUser(user){
 
 onAuthStateChanged(auth, async (user) => {
   if(user && isPhoneUser(user)){
-    const allowed = await isPhoneAllowedAdmin(user.phoneNumber);
-    if(!allowed){
+    const access = await getPhoneAccess(user.phoneNumber);
+    if(!access){
       await signOut(auth);
       showToast("Este número no tiene acceso al panel de administrador");
       return;
     }
+    CURRENT_ADMIN_TABS = access.tabs;
+  } else {
+    CURRENT_ADMIN_TABS = null; // dueño por correo (o nadie): sin restricciones
   }
   isAdmin = !!user;
   if(isAdmin){ subscribeOrders(); subscribeAnalytics(); subscribeAdminAccess(); } else { unsubscribeOrdersFn(); unsubscribeAnalyticsFn(); unsubscribeAdminAccessFn(); }
@@ -2379,12 +2390,13 @@ async function verifyPhoneCode(){
   try{
     const result = await phoneConfirmationResult.confirm(code);
     const phoneNumber = result.user.phoneNumber;
-    const allowed = await isPhoneAllowedAdmin(phoneNumber);
-    if(!allowed){
+    const access = await getPhoneAccess(phoneNumber);
+    if(!access){
       await signOut(auth);
       showToast("Este número no tiene acceso al panel de administrador");
       return;
     }
+    CURRENT_ADMIN_TABS = access.tabs;
     isAdmin = true;
     closeLogin();
     openAdmin();
@@ -2456,41 +2468,155 @@ document.getElementById('adminTabs').addEventListener('click', e => {
   if(tab === 'acceso') renderAccessList();
 });
 
-/* ---------- Panel admin: acceso por celular ---------- */
+/* ---------- Panel admin: acceso por celular (con permisos por sección) ---------- */
+// Pestañas que se le pueden asignar a un número. "acceso" queda fuera a propósito:
+// esa pestaña es solo para quien entra con correo y contraseña.
+const PANEL_TABS = [
+  { key: 'productos',    label: 'Productos' },
+  { key: 'categorias',   label: 'Categorías' },
+  { key: 'pedidos',      label: 'Pedidos' },
+  { key: 'resenas',      label: 'Reseñas' },
+  { key: 'estadisticas', label: 'Estadísticas' },
+  { key: 'sitio',        label: 'Apariencia y datos' },
+];
+const ALL_TAB_KEYS = PANEL_TABS.map(t => t.key);
+
 function isOwnerSession(){
   // true solo si la sesión actual entró con correo y contraseña (el acceso "dueño").
   const u = auth.currentUser;
   return !!u && u.providerData.some(p => p.providerId === 'password');
 }
+
+// Qué pestañas puede ver el usuario actual. null = acceso completo (dueño por correo).
+// Un array = acceso por celular, restringido a esas pestañas.
+let CURRENT_ADMIN_TABS = null;
+
+// El documento guarda las cuentas como MAPA (campo "accounts", con el número de celular
+// como llave: { "+57...": { tabs: [...] } }) y no como lista — así las reglas de Firestore
+// pueden ir directo a "accounts[numero]" sin tener que recorrer un arreglo, y hacer cumplir
+// los permisos de verdad en el servidor, no solo escondiendo pestañas en la pantalla.
+function accountsFromDoc(data){
+  if(!data) return [];
+  if(data.accounts && typeof data.accounts === 'object' && !Array.isArray(data.accounts)){
+    return Object.entries(data.accounts).map(([phone, v]) => ({ phone, tabs: Array.isArray(v.tabs) ? v.tabs : [] }));
+  }
+  // Compatibilidad con versiones anteriores de este panel (accounts como lista, o la
+  // lista plana "allowedPhones" de la primera versión sin permisos por sección).
+  if(Array.isArray(data.accounts)) return data.accounts;
+  if(Array.isArray(data.allowedPhones)) return data.allowedPhones.map(phone => ({ phone, tabs: ALL_TAB_KEYS.slice() }));
+  return [];
+}
+function toAccountsMap(accountsArray){
+  const map = {};
+  accountsArray.forEach(a => { map[a.phone] = { tabs: a.tabs }; });
+  return map;
+}
+
+async function getPhoneAccess(phoneNumber){
+  try{
+    const snap = await getDoc(adminAccessRef);
+    const accounts = accountsFromDoc(snap.exists() ? snap.data() : null);
+    const match = accounts.find(a => a.phone === phoneNumber);
+    if(!match) return null;
+    const tabs = Array.isArray(match.tabs) ? match.tabs.filter(t => ALL_TAB_KEYS.includes(t)) : [];
+    if(tabs.length === 0) return null; // sin ninguna sección marcada = sin acceso
+    return { tabs };
+  }catch(err){
+    console.error(err);
+    return null;
+  }
+}
+
+function applyAdminTabVisibility(){
+  const owner = isOwnerSession();
+  document.querySelectorAll('#adminTabs .chip').forEach(chip => {
+    const tab = chip.dataset.tab;
+    const visible = tab === 'acceso' ? owner : (CURRENT_ADMIN_TABS === null || CURRENT_ADMIN_TABS.includes(tab));
+    chip.style.display = visible ? '' : 'none';
+  });
+  // Si la pestaña activa quedó oculta, salta a la primera pestaña visible.
+  const activeChip = document.querySelector('#adminTabs .chip.active');
+  if(!activeChip || activeChip.style.display === 'none'){
+    const firstVisible = [...document.querySelectorAll('#adminTabs .chip')].find(c => c.style.display !== 'none');
+    if(firstVisible) firstVisible.click();
+  }
+}
+
 function renderAccessList(){
   const list = document.getElementById('accessList');
   if(!list) return;
   const owner = isOwnerSession();
   document.getElementById('accessOwnerControls').style.display = owner ? 'block' : 'none';
   document.getElementById('accessReadonlyNote').style.display = owner ? 'none' : 'block';
-  if(ADMIN_ACCESS_PHONES.length === 0){
+  document.getElementById('accessEditNote').style.display = owner ? 'block' : 'none';
+
+  if(owner){
+    const newTabsWrap = document.getElementById('accessNewTabs');
+    if(!newTabsWrap.dataset.built){
+      newTabsWrap.innerHTML = PANEL_TABS.map(t => `<button type="button" class="tab-perm-chip active" data-tab="${t.key}">${t.label}</button>`).join('');
+      newTabsWrap.dataset.built = '1';
+      newTabsWrap.addEventListener('click', e => {
+        const chip = e.target.closest('.tab-perm-chip');
+        if(!chip) return;
+        chip.classList.toggle('active');
+      });
+    }
+  }
+
+  if(ADMIN_ACCESS_ACCOUNTS.length === 0){
     list.innerHTML = `<div style="color:var(--ink-soft); font-size:13.5px; padding:14px 0;">Todavía no hay números agregados. Solo el acceso por correo funciona hasta que agregues uno.</div>`;
     return;
   }
-  list.innerHTML = ADMIN_ACCESS_PHONES.map(phone => `
-    <div class="admin-row" data-phone="${phone}">
-      <div class="info"><h4>${phone}</h4></div>
-      <div class="actions">
-        ${owner ? `<button class="icon-sm del-access-phone" data-confirm="0" title="Quitar acceso">✕</button>` : ''}
+  list.innerHTML = ADMIN_ACCESS_ACCOUNTS.map(acc => {
+    const tabs = Array.isArray(acc.tabs) ? acc.tabs : [];
+    const chips = PANEL_TABS.map(t => `
+      <button type="button" class="tab-perm-chip${tabs.includes(t.key) ? ' active' : ''}" data-tab="${t.key}" ${owner ? '' : 'disabled'}>${t.label}</button>
+    `).join('');
+    return `
+      <div class="admin-row access-row" data-phone="${acc.phone}">
+        <div class="access-row-top">
+          <div class="info"><h4>${acc.phone}</h4></div>
+          <div class="actions">
+            ${owner ? `<button class="icon-sm del-access-phone" data-confirm="0" title="Quitar acceso">✕</button>` : ''}
+          </div>
+        </div>
+        <div class="tab-perm-group">${chips}</div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+}
+
+async function saveAccountTabs(phone, tabs){
+  const updated = ADMIN_ACCESS_ACCOUNTS.map(a => a.phone === phone ? { phone, tabs } : a);
+  await setDoc(adminAccessRef, { accounts: toAccountsMap(updated) });
 }
 
 document.getElementById('accessList').addEventListener('click', async e => {
-  const row = e.target.closest('.admin-row');
+  const row = e.target.closest('.access-row');
   if(!row) return;
   const phone = row.dataset.phone;
+
+  const permChip = e.target.closest('.tab-perm-chip');
+  if(permChip && !permChip.disabled){
+    const wasActive = permChip.classList.contains('active');
+    permChip.classList.toggle('active', !wasActive);
+    const tabs = [...row.querySelectorAll('.tab-perm-chip.active')].map(c => c.dataset.tab);
+    try{
+      await saveAccountTabs(phone, tabs);
+    }catch(err){
+      console.error(err);
+      permChip.classList.toggle('active', wasActive); // revertir si falló
+      showToast("No se pudo guardar (revisa las reglas de Firestore)");
+    }
+    return;
+  }
+
   const delBtn = e.target.closest('.del-access-phone');
   if(!delBtn) return;
   if(delBtn.dataset.confirm === '1'){
     try{
-      await updateDoc(adminAccessRef, { allowedPhones: arrayRemove(phone) });
+      const updated = ADMIN_ACCESS_ACCOUNTS.filter(a => a.phone !== phone);
+      await setDoc(adminAccessRef, { accounts: toAccountsMap(updated) });
       showToast("Número eliminado");
     }catch(err){
       console.error(err);
@@ -2513,13 +2639,12 @@ document.getElementById('accessList').addEventListener('click', async e => {
 document.getElementById('addAccessPhoneBtn').addEventListener('click', async () => {
   const phone = normalizePhone(document.getElementById('accessPhone').value);
   if(!phone){ showToast("Escribe un número de celular"); return; }
+  if(ADMIN_ACCESS_ACCOUNTS.some(a => a.phone === phone)){ showToast("Ese número ya está en la lista"); return; }
+  const tabs = [...document.querySelectorAll('#accessNewTabs .tab-perm-chip.active')].map(c => c.dataset.tab);
+  if(tabs.length === 0){ showToast("Marca al menos una sección para ese número"); return; }
   try{
-    const snap = await getDoc(adminAccessRef);
-    if(!snap.exists()){
-      await setDoc(adminAccessRef, { allowedPhones: [phone] });
-    } else {
-      await updateDoc(adminAccessRef, { allowedPhones: arrayUnion(phone) });
-    }
+    const updated = ADMIN_ACCESS_ACCOUNTS.concat([{ phone, tabs }]);
+    await setDoc(adminAccessRef, { accounts: toAccountsMap(updated) });
     document.getElementById('accessPhone').value = '';
     showToast("Número agregado");
   }catch(err){
