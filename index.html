@@ -803,9 +803,9 @@
 <div class="modal-overlay" id="loginOverlay">
   <div class="modal">
     <h2>Acceso administrador</h2>
-    <p class="sub">Ingresa con tu correo o tu número de celular para editar el catálogo.</p>
+    <p class="sub">Ingresa tu correo y contraseña para editar el catálogo.</p>
 
-    <div class="login-method-tabs" id="loginMethodTabs" style="display:flex; gap:8px; margin-bottom:18px;">
+    <div class="login-method-tabs" id="loginMethodTabs" style="display:none; gap:8px; margin-bottom:18px;">
       <button type="button" class="chip active" data-method="email">Correo</button>
       <button type="button" class="chip" data-method="phone">Celular</button>
     </div>
@@ -855,7 +855,6 @@
       <button class="chip" data-tab="resenas">Reseñas</button>
       <button class="chip" data-tab="estadisticas">Estadísticas</button>
       <button class="chip" data-tab="sitio">Apariencia y datos</button>
-      <button class="chip" data-tab="acceso">Acceso</button>
     </div>
 
     <div id="adminProductsSection">
@@ -3528,37 +3527,91 @@ function hideImagePreview(){
   fImagePreviewWrap.style.display = 'none';
 }
 
+// Logo de la marca, reutilizado como marca de agua (ya está cargado en el
+// header, así que no duplicamos el base64 en ningún otro lado).
+let _watermarkLogoImg = null;
+function getWatermarkLogo(){
+  if(_watermarkLogoImg) return Promise.resolve(_watermarkLogoImg);
+  const src = document.querySelector('.brand-logo')?.src;
+  if(!src) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => { _watermarkLogoImg = img; resolve(img); };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+// Dibuja la marca de agua del logo en la esquina inferior derecha de un canvas ya pintado.
+async function drawWatermark(ctx, width, height){
+  try{
+    const logo = await getWatermarkLogo();
+    if(!logo) return;
+    const wmSize = Math.max(34, Math.round(Math.min(width, height) * 0.16));
+    const margin = Math.round(wmSize * 0.22);
+    const cx = width - margin - wmSize / 2;
+    const cy = height - margin - wmSize / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, wmSize / 2 + 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.arc(cx, cy, wmSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(logo, cx - wmSize / 2, cy - wmSize / 2, wmSize, wmSize);
+    ctx.restore();
+  }catch(err){ console.error(err); }
+}
+
 // Redimensiona y comprime la foto en el propio navegador (sin subirla a ningún
 // servidor externo) para que quepa dentro del documento de Firestore.
-function resizeImageFile(file, maxSize){
+// opts.enhance: pareja un pequeño ajuste automático de contraste/luz/color para
+// que el fondo se vea más limpio. opts.watermark: agrega el logo como marca de agua.
+function resizeImageFile(file, maxSize, opts){
   maxSize = maxSize || 900;
+  opts = opts || {};
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
     reader.onload = e => {
       const img = new Image();
       img.onerror = () => reject(new Error("No se pudo leer esa imagen"));
-      img.onload = () => {
-        let { width, height } = img;
-        if(width > maxSize || height > maxSize){
-          if(width >= height){ height = Math.round(height * maxSize / width); width = maxSize; }
-          else { width = Math.round(width * maxSize / height); height = maxSize; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      img.onload = async () => {
+        try{
+          let { width, height } = img;
+          if(width > maxSize || height > maxSize){
+            if(width >= height){ height = Math.round(height * maxSize / width); width = maxSize; }
+            else { width = Math.round(width * maxSize / height); height = maxSize; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
 
-        let quality = 0.78;
-        let out = canvas.toDataURL('image/jpeg', quality);
-        while(out.length > 700000 && quality > 0.3){
-          quality -= 0.15;
-          out = canvas.toDataURL('image/jpeg', quality);
-        }
-        if(out.length > 700000){
-          reject(new Error("La imagen sigue muy pesada incluso comprimida"));
-          return;
-        }
-        resolve(out);
+          if(opts.enhance){
+            // Sube un poco el contraste, el brillo y la saturación: ayuda a que
+            // fondos apagados o con mala luz se vean más parejos y presentables.
+            ctx.filter = 'contrast(1.08) brightness(1.05) saturate(1.1)';
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          ctx.filter = 'none';
+
+          if(opts.watermark) await drawWatermark(ctx, width, height);
+
+          let quality = 0.78;
+          let out = canvas.toDataURL('image/jpeg', quality);
+          while(out.length > 700000 && quality > 0.3){
+            quality -= 0.15;
+            out = canvas.toDataURL('image/jpeg', quality);
+          }
+          if(out.length > 700000){
+            reject(new Error("La imagen sigue muy pesada incluso comprimida"));
+            return;
+          }
+          resolve(out);
+        }catch(err){ reject(err); }
       };
       img.src = e.target.result;
     };
@@ -3575,7 +3628,7 @@ fImageFile.addEventListener('change', async () => {
     return;
   }
   try{
-    const dataUrl = await resizeImageFile(file);
+    const dataUrl = await resizeImageFile(file, 900, { enhance: true, watermark: true });
     pendingImageDataUrl = dataUrl;
     removeImageFlag = false;
     showImagePreview(dataUrl);
