@@ -167,6 +167,8 @@
   .hero-art svg{ width:100%; max-width:340px; height:auto; }
 
   /* ---------- Filters ---------- */
+  .gender-tabs{ display:flex; gap:10px; flex-wrap:wrap; padding-top:8px; margin-bottom:18px; }
+  .gender-tabs .chip{ font-weight:600; padding:10px 22px; }
   .filters{ display:flex; gap:10px; flex-wrap:wrap; padding:8px 0 32px; border-bottom:1px solid var(--line); margin-bottom:36px; }
   .chip{
     font-size:14px; padding:9px 18px; border-radius:999px; border:1px solid var(--line);
@@ -180,7 +182,7 @@
   @media (max-width:900px){ .grid{grid-template-columns:repeat(2,1fr);} }
   @media (max-width:560px){ .grid{grid-template-columns:1fr;} }
   .card{ background:var(--card); padding:28px 24px 24px; display:flex; flex-direction:column; transition:background .2s ease; }
-  .card .art{ height:140px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; cursor:zoom-in; position:relative; }
+  .card .art{ height:230px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; cursor:zoom-in; position:relative; }
   .card .art:hover::after{
     content:"🔍"; position:absolute; bottom:4px; right:4px; font-size:13px; opacity:.7;
   }
@@ -282,11 +284,17 @@
   .onboarding-item{ display:flex; gap:14px; align-items:flex-start; font-size:14px; color:var(--ink-soft); line-height:1.5; }
   .onboarding-item strong{ color:var(--ink); }
   .onboarding-emoji{ font-size:22px; flex-shrink:0; width:32px; text-align:center; }
-  .card .art svg{ height:110px; width:auto; }
+  .card .art svg{ height:150px; width:auto; }
   .card .art img{ width:100%; height:100%; object-fit:cover; border-radius:12px; }
   .card .tag{ font-size:12.5px; color:var(--moss); margin-bottom:6px; }
   .card h3{ font-size:18.5px; font-weight:500; margin-bottom:6px; }
   .card .desc{ font-size:14px; color:var(--ink-soft); line-height:1.5; flex:1; margin-bottom:16px; }
+  .card-hint{ flex:1; display:flex; align-items:flex-end; margin-bottom:16px; }
+  .hint-btn{
+    background:none; border:none; padding:0; cursor:pointer; font-family:inherit;
+    font-size:13px; color:var(--clay-deep); text-decoration:underline; text-underline-offset:3px;
+  }
+  .hint-btn:hover{ color:var(--clay); }
   .card .foot{ display:flex; align-items:center; justify-content:space-between; border-top:1px solid var(--line); padding-top:14px; gap:10px; }
   .card .price{ font-family:'Fraunces', serif; font-size:18px; color:var(--clay-deep); }
   .card .stock{ font-size:12px; color:var(--ink-soft); }
@@ -403,19 +411,25 @@
   }
   .lightbox-overlay.open{ display:flex; }
   .lightbox-box{
-    background:var(--card); border-radius:20px; padding:22px; max-width:min(520px, 100%);
-    width:100%; text-align:center; position:relative;
+    background:var(--card); border-radius:20px; padding:26px; max-width:min(780px, 100%);
+    width:100%; text-align:left; position:relative; max-height:90vh; overflow-y:auto;
   }
   .lightbox-close{
     position:absolute; top:12px; right:12px; width:34px; height:34px; border-radius:50%;
     border:1px solid var(--line); background:var(--card); color:var(--ink-soft); cursor:pointer; font-size:15px;
+    z-index:1;
   }
   .lightbox-close:hover{ border-color:var(--clay); color:var(--clay); }
-  .lightbox-visual{ display:flex; align-items:center; justify-content:center; min-height:260px; }
-  .lightbox-visual img{ max-width:100%; max-height:60vh; border-radius:14px; object-fit:contain; }
-  .lightbox-visual svg{ width:100%; max-width:280px; height:auto; }
-  .lightbox-name{ font-family:'Fraunces', serif; font-size:19px; margin-top:16px; }
-  .lightbox-price{ color:var(--clay-deep); font-size:16px; margin-top:4px; }
+  .lightbox-grid{ display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:start; }
+  @media (max-width:640px){ .lightbox-grid{ grid-template-columns:1fr; } }
+  .lightbox-visual{ display:flex; align-items:center; justify-content:center; min-height:220px; }
+  .lightbox-visual img{ max-width:100%; max-height:48vh; border-radius:14px; object-fit:contain; }
+  .lightbox-visual svg{ width:100%; max-width:240px; height:auto; }
+  .lightbox-info{ display:flex; flex-direction:column; padding-top:6px; }
+  .lightbox-name{ font-family:'Fraunces', serif; font-size:21px; }
+  .lightbox-price{ color:var(--clay-deep); font-size:16px; margin-top:8px; }
+  .lightbox-desc-label{ font-size:12.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--moss); margin-top:20px; margin-bottom:6px; }
+  .lightbox-desc{ font-size:14.5px; color:var(--ink-soft); line-height:1.65; white-space:pre-line; }
 
   .admin-list{ margin-top:22px; }
   .admin-row{
@@ -692,6 +706,12 @@
 
 <div class="wrap">
   <section id="catalogo">
+    <div class="gender-tabs" id="genderTabs">
+      <button class="chip active" data-gender="todo">Todo</button>
+      <button class="chip" data-gender="mujer">Mujer</button>
+      <button class="chip" data-gender="hombre">Hombre</button>
+      <button class="chip" data-gender="nino">Niño</button>
+    </div>
     <div class="filters" id="filters">
       <button class="chip active" data-filter="todo">Todo</button>
     </div>
@@ -877,6 +897,17 @@
         <select id="fCat"></select>
       </div>
       <div class="field">
+        <label>Género</label>
+        <select id="fGender">
+          <option value="">Sin asignar</option>
+          <option value="mujer">Mujer</option>
+          <option value="hombre">Hombre</option>
+          <option value="nino">Niño</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
         <label>Ilustración (si no subes foto)</label>
         <select id="fIcon">
           <option value="prenda">Prenda</option>
@@ -886,11 +917,9 @@
           <option value="ovillo">Genérico (ovillo)</option>
         </select>
       </div>
-    </div>
-    <div class="row2">
       <div class="field"><label>Material</label><input id="fMaterial" placeholder="Lana"></div>
-      <div class="field"><label>Existencias<span id="fStockHint" style="display:none; color:var(--ink-soft); font-weight:400;"> (se calcula solo con las tallas)</span></label><input id="fStock" type="number" placeholder="10"></div>
     </div>
+    <div class="field"><label>Existencias<span id="fStockHint" style="display:none; color:var(--ink-soft); font-weight:400;"> (se calcula solo con las tallas)</span></label><input id="fStock" type="number" placeholder="10"></div>
     <div class="field">
       <label>Tallas (opcional — solo si el producto viene en varias tallas o números)</label>
       <div id="sizeRows"></div>
@@ -1253,9 +1282,15 @@
 <div class="lightbox-overlay" id="lightboxOverlay">
   <div class="lightbox-box">
     <button class="lightbox-close" id="lightboxCloseBtn">✕</button>
-    <div class="lightbox-visual" id="lightboxVisual"></div>
-    <div class="lightbox-name" id="lightboxName"></div>
-    <div class="lightbox-price" id="lightboxPrice"></div>
+    <div class="lightbox-grid">
+      <div class="lightbox-visual" id="lightboxVisual"></div>
+      <div class="lightbox-info">
+        <div class="lightbox-name" id="lightboxName"></div>
+        <div class="lightbox-price" id="lightboxPrice"></div>
+        <div class="lightbox-desc-label" id="lightboxDescLabel" style="display:none;">Características</div>
+        <div class="lightbox-desc" id="lightboxDesc"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1426,6 +1461,12 @@ try{
 }catch(e){ /* caché corrupta, se ignora */ }
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "{}"); // {productId: qty}
 let currentFilter = "todo";
+let currentGender = "todo";
+const GENDERS = [
+  { id: 'mujer',  label: 'Mujer' },
+  { id: 'hombre', label: 'Hombre' },
+  { id: 'nino',   label: 'Niño' },
+];
 let isAdmin = false;
 let productsLoaded = false;
 let categoriesLoaded = false;
@@ -1912,7 +1953,7 @@ function cardHtml(p){
       <div class="art">${productVisual(p)}</div>
       <div class="tag">${p.material}</div>
       <h3>${p.name}</h3>
-      <div class="desc">${p.desc}</div>
+      <div class="card-hint"><button type="button" class="hint-btn" data-id="${p.id}">👁 Ver características</button></div>
       ${sizeSelect}
       <div class="stock-line ${allOut?'out':(p.stock<=3?'low':'')}">${allOut ? 'Agotado' : (p.stock<=3 ? `¡Solo quedan ${p.stock}!` : `${p.stock} disponibles`)}</div>
       <div class="foot">
@@ -1928,10 +1969,11 @@ function renderGrid(){
     grid.innerHTML = `<div style="grid-column:1/-1; padding:60px 20px; text-align:center; color:var(--ink-soft); background:var(--card);">Cargando catálogo…</div>`;
     return;
   }
-  const list = currentFilter === 'todo' ? PRODUCTS : PRODUCTS.filter(p => p.cat === currentFilter);
+  let list = currentGender === 'todo' ? PRODUCTS : PRODUCTS.filter(p => p.gender === currentGender);
+  list = currentFilter === 'todo' ? list : list.filter(p => p.cat === currentFilter);
   setTrustTarget('metaCount', PRODUCTS.length);
   if(list.length === 0){
-    grid.innerHTML = `<div style="grid-column:1/-1; padding:60px 20px; text-align:center; color:var(--ink-soft); background:var(--card);">No hay piezas en esta categoría todavía.</div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1; padding:60px 20px; text-align:center; color:var(--ink-soft); background:var(--card);">No hay piezas todavía en esta sección.</div>`;
     return;
   }
   grid.innerHTML = list.map(cardHtml).join('');
@@ -1965,6 +2007,12 @@ function populateCategorySelect(){
 }
 
 function handleCatalogClick(e){
+  const hintBtn = e.target.closest('.hint-btn');
+  if(hintBtn){
+    const p = PRODUCTS.find(x => x.id === hintBtn.dataset.id);
+    if(p) openLightbox(p);
+    return;
+  }
   const artEl = e.target.closest('.art');
   if(artEl && !e.target.closest('.add-btn')){
     const card = artEl.closest('.card');
@@ -2049,6 +2097,11 @@ function openLightbox(p){
   const info = getUnitPrice(p, null);
   const priceText = info.discounted ? `${fmt(info.original)} → ${fmt(info.price)} (${info.badge})` : fmt(info.price);
   document.getElementById('lightboxPrice').textContent = priceText + (p.stock>0 ? ` · ${p.stock} disponibles` : ' · Agotado');
+  const descEl = document.getElementById('lightboxDesc');
+  const descLabel = document.getElementById('lightboxDescLabel');
+  const hasDesc = !!(p.desc && p.desc.trim());
+  descEl.textContent = hasDesc ? p.desc : '';
+  descLabel.style.display = hasDesc ? '' : 'none';
   document.getElementById('lightboxOverlay').classList.add('open');
 }
 function closeLightbox(){
@@ -2088,6 +2141,17 @@ document.getElementById('filters').addEventListener('click', e => {
   document.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
   currentFilter = btn.dataset.filter;
+  renderGrid();
+});
+
+document.getElementById('genderTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.chip');
+  if(!btn) return;
+  document.querySelectorAll('#genderTabs .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  currentGender = btn.dataset.gender;
+  currentFilter = 'todo';
+  renderFilters();
   renderGrid();
 });
 
@@ -3405,6 +3469,8 @@ function renderAdminList(){
   }
   list.innerHTML = PRODUCTS.map(p => {
     const catName = (CATEGORIES.find(c => c.id === p.cat) || {}).name || p.cat;
+    const genderName = p.gender ? ((GENDERS.find(g => g.id === p.gender) || {}).label || p.gender) : null;
+    const genderText = genderName ? ` · ${genderName}` : ' · <span style="color:var(--danger);">sin género</span>';
     const sizesText = (p.sizes && p.sizes.length) ? ` · Tallas: ${p.sizes.map(s => `${s.label} (${s.stock})`).join(', ')}` : '';
     const outletText = p.outlet ? ' · 🔥 Outlet' : '';
     return `
@@ -3412,7 +3478,7 @@ function renderAdminList(){
       <div class="art">${productVisual(p)}</div>
       <div class="info">
         <h4>${p.name}</h4>
-        <div class="p">${fmt(p.price)} · ${p.stock} disp. · ${catName}${sizesText}${outletText}</div>
+        <div class="p">${fmt(p.price)} · ${p.stock} disp. · ${catName}${genderText}${sizesText}${outletText}</div>
       </div>
       <div class="actions">
         <button class="icon-sm edit-product" title="Editar">✎</button>
@@ -3651,6 +3717,7 @@ function startEditProduct(product){
   document.getElementById('fName').value = product.name;
   document.getElementById('fPrice').value = product.price;
   document.getElementById('fCat').value = product.cat;
+  document.getElementById('fGender').value = product.gender || '';
   document.getElementById('fIcon').value = product.icon;
   document.getElementById('fMaterial').value = product.material;
   document.getElementById('fDesc').value = product.desc;
@@ -3672,6 +3739,7 @@ function endEditProduct(){
   editingId = null;
   productFields.forEach(fid => document.getElementById(fid).value = '');
   if(CATEGORIES.length) document.getElementById('fCat').value = CATEGORIES[0].id;
+  document.getElementById('fGender').value = '';
   document.getElementById('fIcon').value = 'ovillo';
   currentSizes = [];
   renderSizeRows();
@@ -3693,6 +3761,7 @@ document.getElementById('addProductBtn').addEventListener('click', async () => {
   const name = document.getElementById('fName').value.trim();
   const price = parseInt(document.getElementById('fPrice').value, 10);
   const cat = document.getElementById('fCat').value;
+  const gender = document.getElementById('fGender').value || null;
   const icon = document.getElementById('fIcon').value;
   const material = document.getElementById('fMaterial').value.trim() || "General";
   const desc = document.getElementById('fDesc').value.trim() || "Pieza hecha a mano.";
@@ -3718,7 +3787,7 @@ document.getElementById('addProductBtn').addEventListener('click', async () => {
 
     addBtn.textContent = wasEditing ? 'Guardando...' : 'Agregando...';
     const outlet = document.getElementById('fOutlet').checked;
-    const data = {name, price, cat, icon, material, stock, sizes, desc, imageUrl: imageUrl || null, outlet};
+    const data = {name, price, cat, gender, icon, material, stock, sizes, desc, imageUrl: imageUrl || null, outlet};
 
     if(wasEditing){
       await updateDoc(doc(db, "productos", editingId), data);
