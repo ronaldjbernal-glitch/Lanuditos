@@ -167,15 +167,39 @@
   .hero-art svg{ width:100%; max-width:340px; height:auto; }
 
   /* ---------- Filters ---------- */
-  .gender-tabs{ display:flex; gap:10px; flex-wrap:wrap; padding-top:8px; margin-bottom:18px; }
-  .gender-tabs .chip{ font-weight:600; padding:10px 22px; }
-  .filters{ display:flex; gap:10px; flex-wrap:wrap; padding:8px 0 32px; border-bottom:1px solid var(--line); margin-bottom:36px; }
   .chip{
     font-size:14px; padding:9px 18px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--ink-soft); cursor:pointer; transition:all .18s ease;
   }
   .chip:hover{ border-color:var(--clay); color:var(--clay); }
   .chip.active{ background:var(--ink); border-color:var(--ink); color:var(--card); }
+
+  /* ---------- Nav de género con desplegable de secciones ---------- */
+  .gender-nav{
+    display:flex; gap:28px; flex-wrap:wrap; padding:14px 0; margin-bottom:36px;
+    border-bottom:1px solid var(--line);
+  }
+  .gender-nav-item{ position:relative; }
+  .gender-nav-btn{
+    background:none; border:none; padding:4px 2px; cursor:pointer; font-family:inherit;
+    font-size:14.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase;
+    color:var(--ink-soft); border-bottom:2px solid transparent; transition:all .15s ease;
+  }
+  .gender-nav-btn:hover{ color:var(--ink); }
+  .gender-nav-btn.active{ color:var(--ink); border-bottom-color:var(--clay); }
+  .gender-dropdown{
+    display:none; position:absolute; top:calc(100% + 10px); left:0; z-index:20;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 14px 34px rgba(0,0,0,.14); padding:8px; min-width:200px;
+    max-height:280px; overflow-y:auto; flex-direction:column; gap:1px;
+  }
+  .gender-dropdown.open{ display:flex; }
+  .gender-dropdown-item{
+    background:none; border:none; text-align:left; padding:9px 12px; border-radius:8px;
+    cursor:pointer; font-family:inherit; font-size:14px; color:var(--ink-soft); transition:all .12s ease;
+  }
+  .gender-dropdown-item:hover{ background:var(--cream); color:var(--ink); }
+  .gender-dropdown-item.active{ background:var(--ink); color:var(--card); }
 
   /* ---------- Grid ---------- */
   .grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:1px; background:var(--line); border:1px solid var(--line); margin-bottom:70px; }
@@ -706,15 +730,7 @@
 
 <div class="wrap">
   <section id="catalogo">
-    <div class="gender-tabs" id="genderTabs">
-      <button class="chip active" data-gender="todo">Todo</button>
-      <button class="chip" data-gender="mujer">Mujer</button>
-      <button class="chip" data-gender="hombre">Hombre</button>
-      <button class="chip" data-gender="nino">Niño</button>
-    </div>
-    <div class="filters" id="filters">
-      <button class="chip active" data-filter="todo">Todo</button>
-    </div>
+    <div class="gender-nav" id="genderNav"></div>
     <div class="grid" id="grid"></div>
   </section>
 
@@ -1082,7 +1098,10 @@
         </div>
 
         <div class="section-title">Notificaciones por correo</div>
-        <div class="field"><label>Correo para avisos de pedidos e inventario bajo</label><input id="sNotifyEmail" type="email" placeholder="tucorreo@ejemplo.com"></div>
+        <div class="field">
+          <label>Correos para avisos de pedidos e inventario bajo (puedes poner varios, separados por coma)</label>
+          <input id="sNotifyEmail" type="email" multiple placeholder="tucorreo@ejemplo.com, otro@ejemplo.com">
+        </div>
 
         <div class="section-title">Redes sociales (déjalo vacío para ocultar el ícono)</div>
         <div class="row2">
@@ -1513,7 +1532,7 @@ onSnapshot(categoriesCol, async (snap) => {
   }
   CATEGORIES = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   categoriesLoaded = true;
-  renderFilters();
+  renderGenderNav();
   populateCategorySelect();
   if(adminOverlay && adminOverlay.classList.contains('open')) renderCategoryList();
 }, err => {
@@ -1688,15 +1707,22 @@ document.addEventListener('click', e => {
   if(wrap && !wrap.contains(e.target)) document.getElementById('notifPanel').classList.remove('open');
 });
 
-// Best-effort: si el correo de avisos está configurado, deja un documento en la
+// Admite uno o varios correos separados por coma en el mismo campo.
+function parseNotifyEmails(raw){
+  if(!raw) return [];
+  return raw.split(',').map(e => e.trim()).filter(Boolean);
+}
+
+// Best-effort: si hay correos de avisos configurados, deja un documento en la
 // colección "mail" con el formato que espera la extensión gratuita de Firebase
 // "Trigger Email from Firestore". Sin esa extensión instalada, esto no envía
 // nada — el documento simplemente queda ahí sin usarse.
 async function queueEmailNotice(subject, text){
-  if(!SETTINGS.notifyEmail) return;
+  const emails = parseNotifyEmails(SETTINGS.notifyEmail);
+  if(emails.length === 0) return;
   try{
     await addDoc(collection(db, "mail"), {
-      to: [SETTINGS.notifyEmail],
+      to: emails,
       message: { subject, text }
     });
   }catch(err){ console.error("No se pudo encolar el correo:", err); }
@@ -1988,15 +2014,28 @@ function handleCatalogChange(e){
 }
 grid.addEventListener('change', handleCatalogChange);
 
-function renderFilters(){
-  const filtersEl = document.getElementById('filters');
-  const chips = ['<button class="chip' + (currentFilter==='todo'?' active':'') + '" data-filter="todo">Todo</button>']
-    .concat(CATEGORIES.map(c => `<button class="chip${currentFilter===c.id?' active':''}" data-filter="${c.id}">${c.name}</button>`));
-  filtersEl.innerHTML = chips.join('');
-  if(currentFilter !== 'todo' && !CATEGORIES.some(c => c.id === currentFilter)){
-    currentFilter = 'todo';
-    filtersEl.querySelector('.chip[data-filter="todo"]').classList.add('active');
-  }
+let openGenderDropdown = null; // id del género cuyo desplegable está abierto, o null
+
+function renderGenderNav(){
+  const nav = document.getElementById('genderNav');
+  if(!nav) return;
+  if(currentFilter !== 'todo' && !CATEGORIES.some(c => c.id === currentFilter)) currentFilter = 'todo';
+
+  const tabs = [{ id: 'todo', label: 'Todo' }].concat(GENDERS);
+  nav.innerHTML = tabs.map(g => {
+    const isActiveGender = currentGender === g.id;
+    if(g.id === 'todo'){
+      return `<div class="gender-nav-item"><button type="button" class="gender-nav-btn${isActiveGender?' active':''}" data-gender="todo">Todo</button></div>`;
+    }
+    const dropdownItems = ['<button type="button" class="gender-dropdown-item' + (isActiveGender && currentFilter==='todo' ? ' active':'') + '" data-filter="todo">Ver todo</button>']
+      .concat(CATEGORIES.map(c => `<button type="button" class="gender-dropdown-item${isActiveGender && currentFilter===c.id?' active':''}" data-filter="${c.id}">${c.name}</button>`));
+    const isOpen = openGenderDropdown === g.id;
+    return `
+      <div class="gender-nav-item">
+        <button type="button" class="gender-nav-btn${isActiveGender?' active':''}" data-gender="${g.id}">${g.label}</button>
+        <div class="gender-dropdown${isOpen?' open':''}" data-dropdown="${g.id}">${dropdownItems.join('')}</div>
+      </div>`;
+  }).join('');
 }
 
 function populateCategorySelect(){
@@ -2135,24 +2174,36 @@ document.getElementById('infoOverlay').addEventListener('click', e => {
   if(e.target.id === 'infoOverlay') closeInfoModal();
 });
 
-document.getElementById('filters').addEventListener('click', e => {
-  const btn = e.target.closest('.chip');
+document.getElementById('genderNav').addEventListener('click', e => {
+  const item = e.target.closest('.gender-dropdown-item');
+  if(item){
+    currentFilter = item.dataset.filter;
+    openGenderDropdown = null;
+    renderGenderNav();
+    renderGrid();
+    return;
+  }
+  const btn = e.target.closest('.gender-nav-btn');
   if(!btn) return;
-  document.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  currentFilter = btn.dataset.filter;
+  const gender = btn.dataset.gender;
+  if(gender === 'todo'){
+    currentGender = 'todo';
+    currentFilter = 'todo';
+    openGenderDropdown = null;
+  } else {
+    // Si ya estaba en ese género, el clic alterna el desplegable; si no, lo cambia y lo abre.
+    if(currentGender === gender) openGenderDropdown = (openGenderDropdown === gender) ? null : gender;
+    else { currentGender = gender; currentFilter = 'todo'; openGenderDropdown = gender; }
+  }
+  renderGenderNav();
   renderGrid();
 });
 
-document.getElementById('genderTabs').addEventListener('click', e => {
-  const btn = e.target.closest('.chip');
-  if(!btn) return;
-  document.querySelectorAll('#genderTabs .chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  currentGender = btn.dataset.gender;
-  currentFilter = 'todo';
-  renderFilters();
-  renderGrid();
+document.addEventListener('click', e => {
+  if(openGenderDropdown && !e.target.closest('.gender-nav-item')){
+    openGenderDropdown = null;
+    renderGenderNav();
+  }
 });
 
 /* ---------- Carrito ---------- */
@@ -3407,7 +3458,7 @@ document.getElementById('saveSiteBtn').addEventListener('click', async () => {
     accentColor: document.getElementById('sAccent').value || DEFAULT_SETTINGS.accentColor,
     whatsappNumber: document.getElementById('sWhatsapp').value.trim().replace(/[^\d]/g,'') || DEFAULT_SETTINGS.whatsappNumber,
     whatsappTemplate: document.getElementById('sWaTemplate').value.trim() || DEFAULT_SETTINGS.whatsappTemplate,
-    notifyEmail: document.getElementById('sNotifyEmail').value.trim(),
+    notifyEmail: parseNotifyEmails(document.getElementById('sNotifyEmail').value).join(', '),
     instagramUrl: document.getElementById('sInstagram').value.trim(),
     facebookUrl: document.getElementById('sFacebook').value.trim(),
     tiktokUrl: document.getElementById('sTiktok').value.trim(),
@@ -3885,6 +3936,7 @@ setInterval(updateOnlineCount, 10000);
 
 /* ---------- Init ---------- */
 applySettings();
+renderGenderNav();
 renderGrid();
 renderCart();
 
