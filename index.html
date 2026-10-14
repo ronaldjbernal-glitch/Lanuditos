@@ -471,6 +471,8 @@
     background:transparent; color:var(--ink-soft); cursor:pointer; font-size:13px;
   }
   .icon-sm:hover{ border-color:var(--clay); color:var(--clay); }
+  .icon-sm:disabled{ opacity:.35; cursor:default; }
+  .icon-sm:disabled:hover{ border-color:var(--line); color:var(--ink-soft); }
   .tab-perm-group{ display:flex; gap:8px; flex-wrap:wrap; }
   .tab-perm-chip{
     font-size:12.5px; padding:7px 14px; border-radius:999px; border:1px solid var(--line);
@@ -1026,16 +1028,13 @@
     </div>
     <div class="row2">
       <div class="field">
-        <label>Categoría</label>
+        <label>Subcategoría</label>
         <select id="fCat"></select>
       </div>
       <div class="field">
-        <label>Género</label>
+        <label>Categoría principal</label>
         <select id="fGender">
           <option value="">Sin asignar</option>
-          <option value="mujer">Mujer</option>
-          <option value="hombre">Hombre</option>
-          <option value="nino">Niño</option>
         </select>
       </div>
     </div>
@@ -1073,12 +1072,28 @@
     </div>
 
     <div id="adminCategoriesSection" style="display:none;">
-      <div class="section-title">Agregar categoría</div>
-      <div class="field"><label>Nombre de la categoría</label><input id="catName" placeholder="Accesorios"></div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" id="addCategoryBtn">Agregar categoría</button>
+      <div class="section-title">Categorías principales</div>
+      <div class="config-note">
+        Son las opciones del menú de arriba de la tienda (Mujer, Hombre, Niño…). "Todo" siempre está y no se puede quitar.
       </div>
-      <div class="section-title">Categorías actuales</div>
+      <div class="field"><label>Nombre de la categoría principal</label><input id="mainName" maxlength="30" placeholder="Hogar"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="addMainBtn">Agregar categoría principal</button>
+      </div>
+      <div class="admin-list" id="mainList"></div>
+
+      <div class="section-title">Subcategorías</div>
+      <div class="config-note">
+        Son las opciones que se despliegan dentro de cada categoría principal (Ruanas, Bufandas…). Marca en cuáles aparece cada una.
+      </div>
+      <div class="field"><label>Nombre de la subcategoría</label><input id="catName" maxlength="40" placeholder="Accesorios"></div>
+      <div class="field">
+        <label>Aparece en</label>
+        <div class="tab-perm-group" id="subNewParents"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="addCategoryBtn">Agregar subcategoría</button>
+      </div>
       <div class="admin-list" id="categoryList"></div>
     </div>
 
@@ -1636,11 +1651,13 @@ try{
 let cart = JSON.parse(localStorage.getItem(CART_KEY) || "{}"); // {productId: qty}
 let currentFilter = "todo";
 let currentGender = "todo";
-const GENDERS = [
+const DEFAULT_GENDERS = [
   { id: 'mujer',  label: 'Mujer' },
   { id: 'hombre', label: 'Hombre' },
   { id: 'nino',   label: 'Niño' },
 ];
+let GENDERS = DEFAULT_GENDERS.slice();   // categorías principales (menú de arriba)
+let MAINS_IN_DB = false;                 // ya están guardadas en Firestore?
 let isAdmin = false;
 let productsLoaded = false;
 let categoriesLoaded = false;
@@ -1685,9 +1702,15 @@ onSnapshot(categoriesCol, async (snap) => {
     await seedDefaultCategories();
     return;
   }
-  CATEGORIES = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const allCats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const mains = allCats.filter(c => c.tipo === 'principal')
+    .sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999));
+  CATEGORIES = allCats.filter(c => c.tipo !== 'principal');   // subcategorías
+  MAINS_IN_DB = mains.length > 0;
+  GENDERS = MAINS_IN_DB ? mains.map(m => ({ id: m.id, label: m.name })) : DEFAULT_GENDERS.slice();
   categoriesLoaded = true;
   renderGenderNav();
+  renderGrid();
   populateCategorySelect();
   if(adminOverlay && adminOverlay.classList.contains('open')) renderCategoryList();
 }, err => {
@@ -2171,10 +2194,29 @@ grid.addEventListener('change', handleCatalogChange);
 
 let openGenderDropdown = null; // id del género cuyo desplegable está abierto, o null
 
+function subsFor(genderId){
+  // sin campo "padres" = aparece en todas las categorías principales
+  return CATEGORIES.filter(c => !Array.isArray(c.padres) || c.padres.includes(genderId));
+}
+function populateGenderSelect(){
+  const sel = document.getElementById('fGender');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Sin asignar</option>' +
+    GENDERS.map(g => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.label)}</option>`).join('');
+  if(GENDERS.some(g => g.id === cur)) sel.value = cur;
+}
 function renderGenderNav(){
   const nav = document.getElementById('genderNav');
   if(!nav) return;
-  if(currentFilter !== 'todo' && !CATEGORIES.some(c => c.id === currentFilter)) currentFilter = 'todo';
+  populateGenderSelect();
+  if(currentGender !== 'todo' && !GENDERS.some(g => g.id === currentGender)){
+    currentGender = 'todo'; currentFilter = 'todo'; openGenderDropdown = null;
+  }
+  if(currentFilter !== 'todo'){
+    const valid = currentGender === 'todo' ? CATEGORIES : subsFor(currentGender);
+    if(!valid.some(c => c.id === currentFilter)) currentFilter = 'todo';
+  }
 
   const tabs = [{ id: 'todo', label: 'Todo' }].concat(GENDERS);
   nav.innerHTML = tabs.map(g => {
@@ -2183,12 +2225,12 @@ function renderGenderNav(){
       return `<div class="gender-nav-item"><button type="button" class="gender-nav-btn${isActiveGender?' active':''}" data-gender="todo">Todo</button></div>`;
     }
     const dropdownItems = ['<button type="button" class="gender-dropdown-item' + (isActiveGender && currentFilter==='todo' ? ' active':'') + '" data-filter="todo">Ver todo</button>']
-      .concat(CATEGORIES.map(c => `<button type="button" class="gender-dropdown-item${isActiveGender && currentFilter===c.id?' active':''}" data-filter="${c.id}">${c.name}</button>`));
+      .concat(subsFor(g.id).map(c => `<button type="button" class="gender-dropdown-item${isActiveGender && currentFilter===c.id?' active':''}" data-filter="${escapeHtml(c.id)}">${escapeHtml(c.name)}</button>`));
     const isOpen = openGenderDropdown === g.id;
     return `
       <div class="gender-nav-item">
-        <button type="button" class="gender-nav-btn${isActiveGender?' active':''}" data-gender="${g.id}">${g.label}</button>
-        <div class="gender-dropdown${isOpen?' open':''}" data-dropdown="${g.id}">${dropdownItems.join('')}</div>
+        <button type="button" class="gender-nav-btn${isActiveGender?' active':''}" data-gender="${escapeHtml(g.id)}">${escapeHtml(g.label)}</button>
+        <div class="gender-dropdown${isOpen?' open':''}" data-dropdown="${escapeHtml(g.id)}">${dropdownItems.join('')}</div>
       </div>`;
   }).join('');
 }
@@ -2922,61 +2964,173 @@ document.getElementById('addAccessPhoneBtn').addEventListener('click', async () 
   }
 });
 
-/* ---------- Panel admin: categorías ---------- */
+/* ---------- Panel admin: categorías principales y subcategorías ---------- */
+let newSubParents = null;   // null = "todas las principales"
+let seedingMains = false;
+
+async function ensureMainsSeeded(){
+  if(MAINS_IN_DB || seedingMains) return;
+  seedingMains = true;
+  try{
+    await Promise.all(DEFAULT_GENDERS.map((g, i) =>
+      setDoc(doc(db, "categorias", g.id), { name: g.label, tipo: 'principal', orden: i })));
+  }catch(err){ console.error(err); }
+  finally{ seedingMains = false; }
+}
+
+function confirmDeleteBtn(btn){
+  // primer toque: pide confirmar; devuelve true si ya estaba confirmado
+  if(btn.dataset.confirm === '1') return true;
+  btn.dataset.confirm = '1';
+  btn.textContent = '✔';
+  btn.title = 'Toca de nuevo para confirmar';
+  setTimeout(() => {
+    if(btn.isConnected){ btn.dataset.confirm = '0'; btn.textContent = '✕'; btn.title = 'Eliminar'; }
+  }, 3000);
+  return false;
+}
+
 function renderCategoryList(){
+  const mainList = document.getElementById('mainList');
   const list = document.getElementById('categoryList');
-  if(!list) return;
+  const newParents = document.getElementById('subNewParents');
+  if(!list || !mainList || !newParents) return;
+  if(isAdmin) ensureMainsSeeded();
+
+  mainList.innerHTML = GENDERS.map((g, i) => {
+    const n = PRODUCTS.filter(p => p.gender === g.id).length;
+    return `
+    <div class="admin-row" data-id="${escapeHtml(g.id)}">
+      <div class="info"><h4>${escapeHtml(g.label)}</h4><div class="p">${n} ${n === 1 ? 'producto' : 'productos'}</div></div>
+      <div class="actions">
+        <button class="icon-sm move-main" data-dir="-1" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="icon-sm move-main" data-dir="1" title="Bajar" ${i === GENDERS.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="icon-sm del-main" data-confirm="0" title="Eliminar">✕</button>
+      </div>
+    </div>`;
+  }).join('') || `<div style="color:var(--ink-soft); font-size:13.5px; padding:14px 0;">Todavía no hay categorías principales.</div>`;
+
+  newParents.innerHTML = GENDERS.map(g => {
+    const on = newSubParents ? newSubParents.has(g.id) : true;
+    return `<button type="button" class="tab-perm-chip${on ? ' active' : ''}" data-main="${escapeHtml(g.id)}">${escapeHtml(g.label)}</button>`;
+  }).join('');
+
   if(CATEGORIES.length === 0){
-    list.innerHTML = `<div style="color:var(--ink-soft); font-size:13.5px; padding:14px 0;">Todavía no hay categorías.</div>`;
+    list.innerHTML = `<div style="color:var(--ink-soft); font-size:13.5px; padding:14px 0;">Todavía no hay subcategorías.</div>`;
     return;
   }
-  list.innerHTML = CATEGORIES.map(c => `
-    <div class="admin-row" data-id="${c.id}">
-      <div class="info"><h4>${c.name}</h4></div>
-      <div class="actions">
-        <button class="icon-sm del-category" data-confirm="0" title="Eliminar">✕</button>
+  list.innerHTML = CATEGORIES.map(c => {
+    const eff = Array.isArray(c.padres) ? c.padres : GENDERS.map(g => g.id);
+    const chips = GENDERS.map(g =>
+      `<button type="button" class="tab-perm-chip toggle-parent${eff.includes(g.id) ? ' active' : ''}" data-main="${escapeHtml(g.id)}">${escapeHtml(g.label)}</button>`).join('');
+    return `
+    <div class="admin-row access-row" data-id="${escapeHtml(c.id)}">
+      <div class="access-row-top">
+        <div class="info"><h4>${escapeHtml(c.name)}</h4></div>
+        <div class="actions"><button class="icon-sm del-category" data-confirm="0" title="Eliminar">✕</button></div>
       </div>
-    </div>
-  `).join('');
+      <div class="tab-perm-group">${chips}</div>
+    </div>`;
+  }).join('');
 }
+
+document.getElementById('mainList').addEventListener('click', async e => {
+  const row = e.target.closest('.admin-row');
+  if(!row) return;
+  const id = row.dataset.id;
+  const moveBtn = e.target.closest('.move-main');
+  const delBtn = e.target.closest('.del-main');
+  try{
+    if(moveBtn){
+      const i = GENDERS.findIndex(g => g.id === id);
+      const j = i + Number(moveBtn.dataset.dir);
+      if(i < 0 || j < 0 || j >= GENDERS.length) return;
+      const order = GENDERS.map(g => g.id);
+      [order[i], order[j]] = [order[j], order[i]];
+      await Promise.all(order.map((gid, idx) => updateDoc(doc(db, "categorias", gid), { orden: idx })));
+      return;
+    }
+    if(!delBtn || !confirmDeleteBtn(delBtn)) return;
+    const usados = PRODUCTS.filter(p => p.gender === id);
+    await deleteDoc(doc(db, "categorias", id));
+    await Promise.all(usados.map(p => updateDoc(doc(db, "productos", p.id), { gender: null })));
+    showToast(usados.length ? `Categoría eliminada. ${usados.length} producto(s) quedaron sin categoría principal` : "Categoría eliminada");
+  }catch(err){
+    console.error(err);
+    showToast("No se pudo guardar el cambio (revisa las reglas de Firestore)");
+  }
+});
+
+document.getElementById('addMainBtn').addEventListener('click', async () => {
+  const name = document.getElementById('mainName').value.trim();
+  if(!name){ showToast("Escribe un nombre"); return; }
+  const id = slugify(name);
+  if(!id || id === 'todo'){ showToast("Ese nombre no es válido"); return; }
+  if(GENDERS.some(g => g.id === id) || CATEGORIES.some(c => c.id === id)){
+    showToast("Ya existe una categoría con ese nombre"); return;
+  }
+  try{
+    await ensureMainsSeeded();
+    await setDoc(doc(db, "categorias", id), { name, tipo: 'principal', orden: GENDERS.length });
+    document.getElementById('mainName').value = '';
+    showToast("Categoría principal agregada");
+  }catch(err){
+    console.error(err);
+    showToast("No se pudo agregar (revisa las reglas de Firestore)");
+  }
+});
+
+document.getElementById('subNewParents').addEventListener('click', e => {
+  const chip = e.target.closest('.tab-perm-chip');
+  if(!chip) return;
+  if(!newSubParents) newSubParents = new Set(GENDERS.map(g => g.id));
+  const m = chip.dataset.main;
+  newSubParents.has(m) ? newSubParents.delete(m) : newSubParents.add(m);
+  chip.classList.toggle('active');
+});
 
 document.getElementById('categoryList').addEventListener('click', async e => {
   const row = e.target.closest('.admin-row');
   if(!row) return;
   const id = row.dataset.id;
+  const chip = e.target.closest('.toggle-parent');
   const delBtn = e.target.closest('.del-category');
-  if(!delBtn) return;
-  if(delBtn.dataset.confirm === '1'){
-    try{
-      await deleteDoc(doc(db, "categorias", id));
-      showToast("Categoría eliminada");
-    }catch(err){
-      console.error(err);
-      showToast("No se pudo eliminar (revisa las reglas de Firestore)");
+  try{
+    if(chip){
+      const c = CATEGORIES.find(x => x.id === id);
+      if(!c) return;
+      const eff = new Set(Array.isArray(c.padres) ? c.padres : GENDERS.map(g => g.id));
+      const m = chip.dataset.main;
+      eff.has(m) ? eff.delete(m) : eff.add(m);
+      const all = GENDERS.every(g => eff.has(g.id));
+      await updateDoc(doc(db, "categorias", id), { padres: all ? null : Array.from(eff) });
+      return;
     }
-  } else {
-    delBtn.dataset.confirm = '1';
-    delBtn.textContent = '✔';
-    delBtn.title = 'Clic de nuevo para confirmar';
-    setTimeout(() => {
-      if(delBtn.isConnected){
-        delBtn.dataset.confirm = '0';
-        delBtn.textContent = '✕';
-        delBtn.title = 'Eliminar';
-      }
-    }, 3000);
+    if(!delBtn || !confirmDeleteBtn(delBtn)) return;
+    await deleteDoc(doc(db, "categorias", id));
+    showToast("Subcategoría eliminada");
+  }catch(err){
+    console.error(err);
+    showToast("No se pudo guardar el cambio (revisa las reglas de Firestore)");
   }
 });
 
 document.getElementById('addCategoryBtn').addEventListener('click', async () => {
   const name = document.getElementById('catName').value.trim();
-  if(!name){ showToast("Escribe un nombre de categoría"); return; }
+  if(!name){ showToast("Escribe un nombre de subcategoría"); return; }
   const id = slugify(name);
-  if(!id){ showToast("Ese nombre no es válido"); return; }
+  if(!id || id === 'todo'){ showToast("Ese nombre no es válido"); return; }
+  if(GENDERS.some(g => g.id === id) || CATEGORIES.some(c => c.id === id)){
+    showToast("Ya existe una categoría con ese nombre"); return;
+  }
+  if(newSubParents && newSubParents.size === 0){ showToast("Elige al menos una categoría principal"); return; }
+  const all = !newSubParents || GENDERS.every(g => newSubParents.has(g.id));
   try{
-    await setDoc(doc(db, "categorias", id), { name });
+    await setDoc(doc(db, "categorias", id), all ? { name } : { name, padres: Array.from(newSubParents) });
     document.getElementById('catName').value = '';
-    showToast("Categoría agregada");
+    newSubParents = null;
+    renderCategoryList();
+    showToast("Subcategoría agregada");
   }catch(err){
     console.error(err);
     showToast("No se pudo agregar (revisa las reglas de Firestore)");
@@ -3770,7 +3924,7 @@ function renderAdminList(){
   list.innerHTML = PRODUCTS.map(p => {
     const catName = (CATEGORIES.find(c => c.id === p.cat) || {}).name || p.cat;
     const genderName = p.gender ? ((GENDERS.find(g => g.id === p.gender) || {}).label || p.gender) : null;
-    const genderText = genderName ? ` · ${genderName}` : ' · <span style="color:var(--danger);">sin género</span>';
+    const genderText = genderName ? ` · ${genderName}` : ' · <span style="color:var(--danger);">sin categoría principal</span>';
     const sizesText = (p.sizes && p.sizes.length) ? ` · Tallas: ${p.sizes.map(s => `${s.label} (${s.stock})`).join(', ')}` : '';
     const outletText = p.outlet ? ' · 🔥 Outlet' : '';
     return `
