@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lanuditos.lat/sitemap.xml
