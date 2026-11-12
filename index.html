@@ -71,38 +71,7 @@
     --on-clay:    #FFFFFF;
     --bar-bg:     #4D5A3F;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --cream:    #171B13;
-      --card:     #20251A;
-      --ink:      #ECEBE2;
-      --ink-soft: #AEB3A0;
-      --clay:     #7C9265;
-      --clay-deep:#B7CA9F;
-      --moss:     #9DB087;
-      --line:     #343B2B;
-      --danger:   #E0807E;
-      --sage:     #232A1E;
-      --sage-2:   #2B3425;
-      --on-clay:  #10140C;
-      --bar-bg:   #2D3725;
-    }
-  }
-  :root[data-theme="dark"]{
-    --cream:    #171B13;
-    --card:     #20251A;
-    --ink:      #ECEBE2;
-    --ink-soft: #AEB3A0;
-    --clay:     #7C9265;
-    --clay-deep:#B7CA9F;
-    --moss:     #9DB087;
-    --line:     #343B2B;
-    --danger:   #E0807E;
-    --sage:     #232A1E;
-    --sage-2:   #2B3425;
-    --on-clay:  #10140C;
-    --bar-bg:   #2D3725;
-  }
+  :root{ color-scheme: light; }
 
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -982,8 +951,8 @@ header{
 .lightbox-box{ border-radius:4px; padding:0; max-width:min(940px, 100%); overflow:hidden; }
 .lightbox-close{ top:16px; right:16px; background:var(--cream); z-index:3; }
 .lightbox-grid{ grid-template-columns:1.05fr 1fr; gap:0; align-items:stretch; }
-.lightbox-visual{ background:var(--sage); min-height:440px; }
-.lightbox-visual img{ width:100%; height:100%; max-height:none; border-radius:0; object-fit:cover; }
+.lightbox-visual{ background:var(--sage); min-height:440px; align-self:start; position:sticky; top:0; }
+.lightbox-visual img{ width:100%; height:auto; max-height:92vh; border-radius:0; object-fit:contain; display:block; }
 .lightbox-info{ padding:clamp(30px,4.4vw,52px); justify-content:center; }
 .lightbox-kicker{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); }
 .lightbox-name{ font-family:'Cormorant Garamond', Georgia, serif; font-size:clamp(34px,4vw,48px); font-weight:400; line-height:1.04; margin-top:14px; }
@@ -997,7 +966,8 @@ header{
 .lightbox-cta:hover{ background:var(--clay-deep); }
 @media (max-width:640px){
   .lightbox-grid{ grid-template-columns:1fr; }
-  .lightbox-visual{ min-height:280px; max-height:46vh; }
+  .lightbox-visual{ min-height:0; max-height:none; position:static; }
+  .lightbox-visual img{ max-height:60vh; }
 }
 
 /* ---------- Proceso ---------- */
@@ -1092,7 +1062,7 @@ footer{ margin-top:10px; padding-left:max(clamp(20px,4vw,56px), calc((100vw - 11
 
 <div class="announce" id="announceBar">
   <span id="announceText">Envíos a toda Bogotá · Pedido directo por WhatsApp</span>
-  <a href="#catalogo" class="announce-link">Ver catálogo <span aria-hidden="true">↗</span></a>
+  <a href="#catalogo" class="announce-link" id="catalogDownloadBtn" title="Descargar el catálogo completo en PDF">Descargar catálogo <span aria-hidden="true">↓</span></a>
 </div>
 
 <header>
@@ -1111,7 +1081,6 @@ footer{ margin-top:10px; padding-left:max(clamp(20px,4vw,56px), calc((100vw - 11
     <div class="online-pill" id="onlinePill" style="display:none;" title="Personas viendo el sitio ahora">
       <span class="dot"></span><span id="onlineCount">0</span>
     </div>
-    <button class="icon-btn icon-btn-wide" id="themeToggle" title="Cambiar tema">◐<span class="icon-label">Tema</span></button>
     <button class="icon-btn icon-btn-wide" id="cartOpenBtn" title="Ver carrito">
       <svg class="bag-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="icon-label">Carrito</span>
       <span class="badge" id="cartBadge" style="display:none;">0</span>
@@ -3011,15 +2980,6 @@ function showToast(text){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
 }
-
-/* ---------- Tema ---------- */
-document.getElementById('themeToggle').addEventListener('click', () => {
-  const root = document.documentElement;
-  const current = root.getAttribute('data-theme');
-  if(current === 'dark'){ root.setAttribute('data-theme','light'); }
-  else if(current === 'light'){ root.removeAttribute('data-theme'); }
-  else { root.setAttribute('data-theme','dark'); }
-});
 
 /* ---------- Login admin (Firebase Authentication) ---------- */
 const loginOverlay = document.getElementById('loginOverlay');
@@ -5443,7 +5403,7 @@ function repBuildDocx(m){
 }
 
 /* ---------- PDF ---------- */
-const REP_WIN = { 0x20AC: 0x80, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2026: 0x85 };
+const REP_WIN = { 0x20AC: 0x80, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2026: 0x85, 0x2212: 0x2D };
 function repPdfStr(s){
   let out = '';
   for(const ch of String(s)){
@@ -5631,6 +5591,218 @@ async function repExport(kind){
 document.getElementById('repDocxBtn').addEventListener('click', () => repExport('docx'));
 document.getElementById('repPdfBtn').addEventListener('click', () => repExport('pdf'));
 window.__repTest = { buildReport, repPrepare, repBuildDocx, repBuildPdf };
+
+
+/* =====================================================================
+   CATÁLOGO EN PDF (botón "Descargar catálogo" de la barra superior)
+   Incluye nombre, dominio, marca de agua e invitación a compartir/vender
+   ===================================================================== */
+async function catLoadImage(src, w, h){
+  try{
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.fillStyle = '#F4F1E8'; x.fillRect(0, 0, w, h);
+    const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);     // recorte tipo "cover"
+    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+    x.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    return { w, h, jpg: repCanvasBytes(c, 'image/jpeg', 0.82) };
+  }catch(e){ return null; }
+}
+function catBuildPdf(m){
+  const PW = 595.28, PH = 841.89, MX = 40, CW = PW - 2 * MX, GAP = 14, CWD = (CW - GAP) / 2, CH = 212, IMH = 124;
+  const mc = document.createElement('canvas').getContext('2d');
+  const tw = (s, size, bold) => { mc.font = (bold ? 'bold ' : '') + '100px Arial, Helvetica, sans-serif'; return mc.measureText(s).width / 100 * size; };
+  const wrapText = (s, maxW, size, bold, maxLines) => {
+    const out = []; let cur = '';
+    repPdfStr(String(s || '').replace(/\n/g, ' ')).split(' ').forEach(w => {
+      const t = cur ? cur + ' ' + w : w;
+      if(!cur || tw(t, size, bold) <= maxW) cur = t; else { out.push(cur); cur = w; }
+    });
+    if(cur) out.push(cur);
+    if(maxLines && out.length > maxLines){ const r = out.slice(0, maxLines); let l = r[maxLines - 1]; while(l.length > 1 && tw(l + '...', size, bold) > maxW) l = l.slice(0, -1); r[maxLines - 1] = l + '...'; return r; }
+    return out;
+  };
+  const hex = c => { const n = parseInt(c.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255].map(v => v.toFixed(3)).join(' '); };
+  const pages = [], images = [];
+  let pg = null, y = 0;
+  const newPage = () => { pg = { ops: [], links: [] }; pages.push(pg); y = PH - 62; };
+  const T = (s, x, yy, size, o = {}) => pg.ops.push(`BT /${o.bold ? 'F2' : 'F1'} ${size} Tf ${hex(o.color || '#2B2B2B')} rg ${x.toFixed(2)} ${yy.toFixed(2)} Td (${repPdfEsc(s)}) Tj ET`);
+  const R = (x, yy, w, h, color) => pg.ops.push(`${hex(color)} rg ${x.toFixed(2)} ${yy.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+  const RS = (x, yy, w, h, color) => pg.ops.push(`${hex(color)} RG 0.6 w ${x.toFixed(2)} ${yy.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re S`);
+  const Ln = (x1, y1, x2, y2, color, wd) => pg.ops.push(`${hex(color)} RG ${wd || 0.5} w ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`);
+  const IM = (img, x, yy, w, h) => { images.push(img); pg.ops.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${yy.toFixed(2)} cm /Im${images.length} Do Q`); };
+  const center = (s, yy, size, bold, color) => T(s, (PW - tw(repPdfStr(s), size, bold)) / 2, yy, size, { bold, color });
+  const link = (x, yy, w, h, url) => pg.links.push({ r: [x, yy, x + w, yy + h], url });
+  const waUrl = 'https://wa.me/' + m.whatsapp;
+  const siteUrl = 'https://' + m.domain;
+
+  /* portada */
+  newPage();
+  R(0, PH - 170, PW, 170, '#4D5A3F'); R(0, PH - 176, PW, 6, '#B8805A');
+  center(m.brand.toUpperCase(), PH - 92, 40, true, '#F4F2E8');
+  center('Abraza la calidad, siente la tradición', PH - 124, 13, false, '#E3DDC9');
+  let cy = PH - 215;
+  if(m.logo){ const lh = 150, lw = lh * m.logo.w / m.logo.h; IM(m.logo, (PW - lw) / 2, cy - lh, lw, lh); cy -= lh + 40; }
+  center('Catálogo de productos', cy, 26, true, '#4D5A3F'); cy -= 30;
+  center(m.domain, cy, 18, true, '#B8805A'); link((PW - tw(m.domain, 18, true)) / 2, cy - 4, tw(m.domain, 18, true), 22, siteUrl); cy -= 26;
+  if(m.whatsapp) { center('WhatsApp +' + m.whatsapp, cy, 12, false, '#6B6B63'); cy -= 20; }
+  center(m.count + ' productos tejidos a mano', cy, 11, false, '#6B6B63'); cy -= 40;
+  center('Catálogo actualizado el ' + m.date, cy, 10, false, '#6B6B63'); cy -= 14;
+  center('Precios y disponibilidad sujetos a cambio. Pedidos directos por WhatsApp o en ' + m.domain, cy, 9, false, '#6B6B63');
+
+  /* productos */
+  let col = 0, rowTop = 0;
+  const startPage = () => { newPage(); col = 0; };
+  startPage();
+  m.groups.forEach(g => {
+    if(y - 30 - CH < 60){ startPage(); }
+    else if(col !== 0){ col = 0; y = rowTop - CH - 10; if(y - 30 - CH < 60) startPage(); }
+    R(MX, y - 18, CW, 22, '#4D5A3F'); T(g.name, MX + 10, y - 12, 12, { bold: 1, color: '#FFFFFF' });
+    y -= 34;
+    g.items.forEach((p, i) => {
+      if(col === 0){ if(y - CH < 56) startPage(), y -= 4; rowTop = y; }
+      const x = MX + col * (CWD + GAP), top = rowTop;
+      RS(x, top - CH, CWD, CH, '#D9D4C7');
+      if(p.img) IM(p.img, x + 1, top - IMH - 1, CWD - 2, IMH);
+      else { R(x + 1, top - IMH - 1, CWD - 2, IMH, '#F4F1E8'); const ini = (p.name || '?').slice(0, 1).toUpperCase(); T(ini, x + CWD / 2 - tw(ini, 44, true) / 2, top - IMH / 2 - 14, 44, { bold: 1, color: '#B8805A' }); }
+      if(p.out) { R(x + 8, top - 26, 60, 18, '#B3261E'); T('AGOTADO', x + 13, top - 20, 8.5, { bold: 1, color: '#FFFFFF' }); }
+      else if(p.badge){ R(x + 8, top - 26, tw(p.badge, 8.5, true) + 10, 18, '#B8805A'); T(p.badge, x + 13, top - 20, 8.5, { bold: 1, color: '#FFFFFF' }); }
+      let ty = top - IMH - 16;
+      wrapText(p.name, CWD - 16, 11, true, 2).forEach(l => { T(l, x + 8, ty, 11, { bold: 1 }); ty -= 13; });
+      T(p.meta, x + 8, ty, 8, { color: '#6B6B63' }); ty -= 15;
+      if(p.original) { T(p.original, x + 8, ty, 9, { color: '#6B6B63' }); Ln(x + 8, ty + 3, x + 8 + tw(p.original, 9, false), ty + 3, '#6B6B63', 0.6); T(p.price, x + 14 + tw(p.original, 9, false), ty, 13, { bold: 1, color: '#4D5A3F' }); }
+      else T(p.price, x + 8, ty, 13, { bold: 1, color: '#4D5A3F' });
+      ty -= 14;
+      if(p.sizes) { wrapText(p.sizes, CWD - 16, 8, false, 1).forEach(l => { T(l, x + 8, ty, 8, { color: '#2B2B2B' }); ty -= 11; }); }
+      wrapText(p.desc, CWD - 16, 8, false, p.sizes ? 2 : 3).forEach(l => { T(l, x + 8, ty, 8, { color: '#6B6B63' }); ty -= 10.5; });
+      col++;
+      if(col === 2){ col = 0; y = rowTop - CH - 10; }
+    });
+    if(col !== 0){ col = 0; y = rowTop - CH - 10; }
+    y -= 6;
+  });
+
+  /* página final: invitación a compartir / vender */
+  newPage();
+  R(0, PH - 130, PW, 130, '#4D5A3F'); R(0, PH - 136, PW, 6, '#B8805A');
+  center('¿Quieres compartir o vender', PH - 66, 26, true, '#F4F2E8');
+  center('nuestro catálogo?', PH - 98, 26, true, '#F4F2E8');
+  let ly = PH - 190;
+  const para = (s, size, bold, color) => { wrapText(s, CW - 40, size, bold).forEach(l => { T(l, MX + 20, ly, size, { bold, color }); ly -= size * 1.55; }); ly -= 6; };
+  para('Este catálogo es para que lo compartas.', 15, true, '#4D5A3F');
+  para('Envíalo a tus familiares, amigas y clientes por WhatsApp, estados, Instagram o donde quieras. Cada pieza de ' + m.brand + ' está tejida a mano, una por una, y entre más personas la conozcan, mejor.', 11, false, '#2B2B2B');
+  ly -= 8;
+  para('Y si quieres venderlo, también puedes.', 15, true, '#B8805A');
+  para('Si te gustaría ser vendedora o vendedor de nuestros productos, revender el catálogo o hacer un pedido por mayor, escríbenos por WhatsApp. Te contamos cómo funciona, los precios para revendedores y los tiempos de entrega.', 11, false, '#2B2B2B');
+  ly -= 14;
+  const bw = CW - 40, bx = MX + 20;
+  R(bx, ly - 50, bw, 56, '#B8805A');
+  T('Escríbenos por WhatsApp' + (m.whatsapp ? ': +' + m.whatsapp : ''), bx + 18, ly - 18, 14, { bold: 1, color: '#FFFFFF' });
+  T('Toca aquí o escribe al número y cuéntanos que quieres ser parte.', bx + 18, ly - 36, 9.5, { color: '#FFFFFF' });
+  link(bx, ly - 50, bw, 56, waUrl);
+  ly -= 90;
+  R(bx, ly - 40, bw, 46, '#F4F1E8');
+  T('Compra directo en nuestra tienda: ' + m.domain, bx + 18, ly - 14, 12, { bold: 1, color: '#4D5A3F' });
+  T('Mira los productos, arma tu carrito y envía tu pedido por WhatsApp.', bx + 18, ly - 30, 9.5, { color: '#6B6B63' });
+  link(bx, ly - 40, bw, 46, siteUrl);
+  ly -= 90;
+  para('Importante: este catálogo y sus fotografías son propiedad de ' + m.brand + '. Puedes compartirlo completo, tal como está, sin modificarlo ni quitar la marca.', 9, false, '#6B6B63');
+
+  /* pie, encabezado y marca de agua en todas las páginas */
+  const N = pages.length;
+  const wmW = tw(m.brand.toUpperCase(), 78, true), wmW2 = tw(m.domain, 26, true), c45 = Math.SQRT1_2;
+  pages.forEach((p, i) => {
+    pg = p;
+    if(i > 0){
+      Ln(MX, 44, PW - MX, 44, '#D9D4C7', 0.5);
+      T(m.brand + ' · ' + m.domain, MX, 31, 8, { color: '#6B6B63' });
+      const f = '¿Quieres compartir o vender este catálogo? Escríbenos: WhatsApp +' + m.whatsapp;
+      T(f, (PW - tw(repPdfStr(f), 8, false)) / 2 + 40, 31, 8, { bold: 1, color: '#B8805A' });
+      link(MX, 24, CW, 16, waUrl);
+      const t = 'Pág. ' + (i + 1) + ' de ' + N; T(t, PW - MX - tw(repPdfStr(t), 8, false), 31, 8, { color: '#6B6B63' });
+      if(i < N - 1){ T('Catálogo ' + m.brand, MX, PH - 34, 8, { color: '#6B6B63' }); Ln(MX, PH - 40, PW - MX, PH - 40, '#B8805A', 0.8); }
+    }
+    /* marca de agua diagonal, semitransparente, por encima de todo */
+    const cx = PW / 2, cyy = PH / 2;
+    p.ops.push(`q /GSw gs ${hex('#4D5A3F')} rg BT /F2 78 Tf ${c45.toFixed(4)} ${c45.toFixed(4)} ${(-c45).toFixed(4)} ${c45.toFixed(4)} ${(cx - wmW / 2 * c45).toFixed(2)} ${(cyy - wmW / 2 * c45).toFixed(2)} Tm (${repPdfEsc(m.brand.toUpperCase())}) Tj ET Q`);
+    p.ops.push(`q /GSw gs ${hex('#B8805A')} rg BT /F2 26 Tf ${c45.toFixed(4)} ${c45.toFixed(4)} ${(-c45).toFixed(4)} ${c45.toFixed(4)} ${(cx - wmW2 / 2 * c45 + 34).toFixed(2)} ${(cyy - wmW2 / 2 * c45 - 34).toFixed(2)} Tm (${repPdfEsc(m.domain)}) Tj ET Q`);
+  });
+
+  /* ensamblar */
+  const chunks = [], offs = [];
+  let pos = 0;
+  const add = d => { const u = typeof d === 'string' ? Uint8Array.from(d, c => c.charCodeAt(0) & 255) : d; chunks.push(u); pos += u.length; };
+  const nImg = images.length, firstImg = 6, firstPage = firstImg + nImg;
+  add('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  const obj = (n, body) => { offs[n] = pos; add(n + ' 0 obj\n'); add(body); add('\nendobj\n'); };
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => (firstPage + i * 2) + ' 0 R').join(' ')}] /Count ${N} >>`);
+  obj(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  obj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  obj(5, '<< /Type /ExtGState /ca 0.10 /CA 0.10 >>');
+  images.forEach((im, i) => {
+    offs[firstImg + i] = pos;
+    add((firstImg + i) + ` 0 obj\n<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.jpg.length} >>\nstream\n`);
+    add(im.jpg); add('\nendstream\nendobj\n');
+  });
+  pages.forEach((p, i) => {
+    const pn = firstPage + i * 2, cn = pn + 1, content = p.ops.join('\n');
+    // cada página declara las imágenes que realmente usa
+    const used = []; p.ops.forEach(o => { const mm = o.match(/\/Im(\d+) Do/); if(mm) used.push(Number(mm[1])); });
+    const xo = used.map(k => `/Im${k} ${firstImg + k - 1} 0 R`).join(' ');
+    const annots = p.links.map(l => `<< /Type /Annot /Subtype /Link /Rect [${l.r.map(v => v.toFixed(2)).join(' ')}] /Border [0 0 0] /A << /S /URI /URI (${l.url}) >> >>`).join(' ');
+    obj(pn, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /ExtGState << /GSw 5 0 R >> /XObject << ${xo} >> >> /Contents ${cn} 0 R ${annots ? `/Annots [${annots}]` : ''} >>`);
+    offs[cn] = pos; add(cn + ` 0 obj\n<< /Length ${content.length} >>\nstream\n`); add(content); add('\nendstream\nendobj\n');
+  });
+  const total = firstPage + N * 2, xref = pos;
+  add(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for(let n = 1; n < total; n++) add(String(offs[n]).padStart(10, '0') + ' 00000 n \n');
+  add(`trailer\n<< /Size ${total} /Root 1 0 R /Info << /Title (${repPdfEsc('Catalogo ' + m.brand + ' - ' + m.domain)}) /Producer (${repPdfEsc(m.brand)}) >> >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+async function downloadCatalog(){
+  const link = document.getElementById('catalogDownloadBtn');
+  if(link.dataset.busy) return;
+  link.dataset.busy = '1';
+  const original = link.innerHTML;
+  link.textContent = 'Preparando catálogo…';
+  try{
+    const brand = SETTINGS.brandName || 'Lanuditos';
+    const catName = id => (CATEGORIES.find(c => c.id === id) || {}).name || 'Otros productos';
+    const order = CATEGORIES.map(c => c.id);
+    const byCat = {};
+    PRODUCTS.forEach(p => { (byCat[p.cat] || (byCat[p.cat] = [])).push(p); });
+    const ids = Object.keys(byCat).sort((a, b) => (order.indexOf(a) < 0 ? 999 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 999 : order.indexOf(b)));
+    const groups = [];
+    for(const id of ids){
+      const items = [];
+      for(const p of byCat[id]){
+        const hasSizes = p.sizes && p.sizes.length > 0;
+        const avail = hasSizes ? p.sizes.filter(s => s.stock > 0) : [];
+        const out = hasSizes ? avail.length === 0 : !(p.stock > 0);
+        const info = getUnitPrice(p, hasSizes ? (avail[0] || p.sizes[0]).label : null);
+        items.push({
+          name: p.name, out, badge: info.discounted ? info.badge : '',
+          meta: [catName(p.cat), p.material].filter(Boolean).join(' · '),
+          price: fmt(info.price), original: info.discounted ? fmt(info.original) : '',
+          sizes: hasSizes ? 'Tallas disponibles: ' + (avail.length ? avail.map(s => s.label).join(', ') : 'ninguna por ahora') : '',
+          desc: p.desc || '',
+          img: p.imageUrl ? await catLoadImage(p.imageUrl, 600, Math.round(600 * 124 / 250)) : null
+        });
+      }
+      groups.push({ name: catName(id), items });
+    }
+    const logo = await repLoadLogo();
+    const d = new Date();
+    const m = { brand, domain: SITE_DOMAIN, whatsapp: String(SETTINGS.whatsappNumber || '').replace(/\D/g, ''), logo, groups, count: PRODUCTS.length, date: d.getDate() + ' de ' + REP_MONTHS_ES[d.getMonth()] + ' de ' + d.getFullYear() };
+    const a = document.createElement('a'); a.href = URL.createObjectURL(catBuildPdf(m)); a.download = 'Catalogo-' + brand.replace(/\s+/g, '') + '.pdf';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    showToast('Catálogo descargado');
+  }catch(err){ console.error(err); showToast('No se pudo crear el catálogo'); }
+  finally{ link.innerHTML = original; delete link.dataset.busy; }
+}
+document.getElementById('catalogDownloadBtn').addEventListener('click', e => { e.preventDefault(); downloadCatalog(); });
+window.__catTest = { downloadCatalog };
 
 </script>
 
