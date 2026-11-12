@@ -950,9 +950,10 @@ header{
 .lightbox-overlay{ background:rgba(28,32,20,.55); }
 .lightbox-box{ border-radius:4px; padding:0; max-width:min(940px, 100%); overflow:hidden; }
 .lightbox-close{ top:16px; right:16px; background:var(--cream); z-index:3; }
-.lightbox-grid{ grid-template-columns:1.05fr 1fr; gap:0; align-items:stretch; }
+.lightbox-grid{ grid-template-columns:1.05fr 1fr; gap:0; align-items:start; max-height:90vh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+body.lb-open{ overflow:hidden; }
 .lightbox-visual{ background:var(--sage); min-height:440px; align-self:start; position:sticky; top:0; }
-.lightbox-visual img{ width:100%; height:auto; max-height:92vh; border-radius:0; object-fit:contain; display:block; }
+.lightbox-visual img{ width:100%; height:auto; max-height:88vh; border-radius:0; object-fit:contain; display:block; }
 .lightbox-info{ padding:clamp(30px,4.4vw,52px); justify-content:center; }
 .lightbox-kicker{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); }
 .lightbox-name{ font-family:'Cormorant Garamond', Georgia, serif; font-size:clamp(34px,4vw,48px); font-weight:400; line-height:1.04; margin-top:14px; }
@@ -2775,9 +2776,12 @@ function openLightbox(p){
   descEl.textContent = hasDesc ? p.desc : '';
   descLabel.style.display = hasDesc ? '' : 'none';
   document.getElementById('lightboxOverlay').classList.add('open');
+  document.body.classList.add('lb-open');
+  const lg = document.querySelector('#lightboxOverlay .lightbox-grid'); if(lg) lg.scrollTop = 0;
 }
 function closeLightbox(){
   document.getElementById('lightboxOverlay').classList.remove('open');
+  document.body.classList.remove('lb-open');
 }
 document.getElementById('lightboxCloseBtn').addEventListener('click', closeLightbox);
 document.getElementById('lightboxCtaBtn').addEventListener('click', closeLightbox);
